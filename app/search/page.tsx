@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { Suspense } from "react";
 import SearchPage from "./SearchPage";
 
@@ -8,4 +10,3 @@ export default function Page() {
     </Suspense>
   );
 }
-
