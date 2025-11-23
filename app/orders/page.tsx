@@ -28,6 +28,42 @@ const formatPrice = (price: number) => {
   return `$${price.toLocaleString('es-CO')}`;
 };
 
+// Función para obtener los estilos según el estado
+const getEstadoStyles = (estado: string) => {
+  switch (estado) {
+    case "pagado":
+      return "bg-green-100 text-green-800";
+    case "entregado":
+      return "bg-green-100 text-green-800";
+    case "enviado":
+      return "bg-blue-100 text-blue-800";
+    case "completado":
+      return "bg-green-100 text-green-800";
+    case "pendiente":
+      return "bg-yellow-100 text-yellow-800";
+    case "en_devolucion":
+      return "bg-orange-100 text-orange-800";
+    case "cancelado":
+      return "bg-red-100 text-red-800";
+    default:
+      return "bg-gray-100 text-gray-800";
+  }
+};
+
+// Función para formatear el texto del estado
+const formatEstadoText = (estado: string) => {
+  const estados: { [key: string]: string } = {
+    "pagado": "Pagado",
+    "entregado": "Entregado",
+    "enviado": "Enviado",
+    "completado": "Completado",
+    "pendiente": "Pendiente",
+    "en_devolucion": "En Devolución",
+    "cancelado": "Cancelado"
+  };
+  return estados[estado] || estado;
+};
+
 export default function OrdersPage() {
   const [ordenes, setOrdenes] = useState<Orden[]>([]);
   const [reviews, setReviews] = useState<Review[]>([]);
@@ -152,15 +188,9 @@ export default function OrdersPage() {
                       </td>
                       <td className="px-6 py-4 text-sm">
                         <span
-                          className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${
-                            orden.estado === "entregado"
-                              ? "bg-green-100 text-green-800"
-                              : orden.estado === "enviado"
-                                ? "bg-blue-100 text-blue-800"
-                                : "bg-yellow-100 text-yellow-800"
-                          }`}
+                          className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${getEstadoStyles(orden.estado)}`}
                         >
-                          {orden.estado}
+                          {formatEstadoText(orden.estado)}
                         </span>
                       </td>
                       <td className="px-6 py-4 text-sm">

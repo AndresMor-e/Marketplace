@@ -7,7 +7,7 @@ import Navbar from "@/components/navbar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import Link from "next/link";
-import { CheckCircle2, Package, MapPin, Calendar, CreditCard, Star, FileText, Truck, RotateCcw } from 'lucide-react';
+import { CheckCircle2, Package, MapPin, Calendar, CreditCard, Star, FileText, Truck, RotateCcw, X } from 'lucide-react';
 
 interface Producto {
   id: string;
@@ -42,6 +42,53 @@ interface DevolucionData {
   orden_id: string;
 }
 
+interface OpinionData {
+  producto_id: string;
+  orden_id: string;
+  calificacion: number;
+  comentario: string;
+  titulo?: string;
+}
+
+// Función para formatear el texto del estado
+const formatEstadoText = (estado: string) => {
+  const estados: { [key: string]: string } = {
+    "pagado": "Pagado",
+    "entregado": "Entregado",
+    "enviado": "Enviado",
+    "completado": "Completado",
+    "pendiente": "Pendiente",
+    "en_devolucion": "En devolución",
+    "En devolución": "En devolución",
+    "cancelado": "Cancelado"
+  };
+  return estados[estado] || estado;
+};
+
+// Función para obtener los estilos según el estado
+const getEstadoStyles = (estado: string) => {
+  const estadoNormalizado = estado.toLowerCase();
+  
+  if (estadoNormalizado.includes('devolucion') || estadoNormalizado.includes('devolución')) {
+    return "bg-yellow-100 text-yellow-800";
+  }
+  
+  switch (estadoNormalizado) {
+    case "pagado":
+    case "entregado":
+    case "completado":
+      return "bg-green-100 text-green-800";
+    case "enviado":
+      return "bg-blue-100 text-blue-800";
+    case "pendiente":
+      return "bg-yellow-100 text-yellow-800";
+    case "cancelado":
+      return "bg-red-100 text-red-800";
+    default:
+      return "bg-gray-100 text-gray-800";
+  }
+};
+
 export default function OrderConfirmation() {
   const params = useParams();
   const router = useRouter();
@@ -49,7 +96,9 @@ export default function OrderConfirmation() {
   const [orden, setOrden] = useState<Orden | null>(null);
   const [loading, setLoading] = useState(true);
   const [mostrarModalDevolucion, setMostrarModalDevolucion] = useState(false);
+  const [mostrarModalOpinion, setMostrarModalOpinion] = useState(false);
   const [productoDevolucion, setProductoDevolucion] = useState<Producto | null>(null);
+  const [productoOpinion, setProductoOpinion] = useState<Producto | null>(null);
   const [devolucionData, setDevolucionData] = useState<DevolucionData>({
     motivo: "",
     razon: "",
@@ -57,6 +106,14 @@ export default function OrderConfirmation() {
     producto_id: "",
     orden_id: ""
   });
+  const [opinionData, setOpinionData] = useState<OpinionData>({
+    producto_id: "",
+    orden_id: "",
+    calificacion: 0,
+    comentario: "",
+    titulo: ""
+  });
+  const [hoverRating, setHoverRating] = useState(0);
   const supabase = createClient();
 
   useEffect(() => {
@@ -106,7 +163,6 @@ export default function OrderConfirmation() {
 
   const calcularFechaDevolucion = (fechaCompra: string) => {
     const fecha = new Date(fechaCompra);
-    // CORREGIDO: Agregar 1 día completo (24 horas)
     fecha.setDate(fecha.getDate() + 1);
     return fecha.toLocaleDateString('es-ES', {
       year: 'numeric',
@@ -122,9 +178,7 @@ export default function OrderConfirmation() {
   };
 
   const handleComprarNuevamente = (producto: Producto) => {
-    // CORREGIDO: Redirigir directamente sin parámetro para evitar duplicados
     router.push('/checkout');
-    // Agregar producto después de la redirección usando localStorage
     setTimeout(() => {
       localStorage.setItem('productoComprarNuevamente', producto.id);
     }, 100);
@@ -162,17 +216,75 @@ export default function OrderConfirmation() {
     }
 
     try {
-      const { error } = await supabase
+      // 1. Insertar la solicitud de devolución en tu tabla
+      const { data: devolucion, error: devolucionError } = await supabase
         .from("devoluciones")
         .insert([{
-          ...devolucionData,
+          motivo: devolucionData.motivo,
+          razon: devolucionData.razon,
+          comentarios: devolucionData.comentarios,
+          producto_id: devolucionData.producto_id,
+          orden_id: devolucionData.orden_id,
           estado: "pendiente",
           fecha_solicitud: new Date().toISOString()
-        }]);
+        }])
+        .select()
+        .single();
 
-      if (error) throw error;
+      if (devolucionError) throw devolucionError;
 
-      alert("Solicitud de devolución enviada correctamente");
+      // 2. Buscar el item de la orden para obtener la cantidad
+      const itemOrden = orden?.items.find(item => 
+        item.productos.id === devolucionData.producto_id
+      );
+
+      if (itemOrden) {
+        // 3. Si solo hay un producto en la orden, marcar toda la orden como en devolución
+        if (orden?.items.length === 1) {
+          const { error: ordenError } = await supabase
+            .from("ordenes")
+            .update({ estado: "en_devolucion" })
+            .eq("id", orden.id);
+
+          if (ordenError) throw ordenError;
+          
+          // Actualizar el estado local
+          setOrden(prev => prev ? { ...prev, estado: "en_devolucion" } : null);
+        }
+        
+        // 4. Actualizar stock del producto (revertir la compra)
+        const { error: stockError } = await supabase
+          .from("productos")
+          .update({ 
+            stock: supabase.rpc('increment', {
+              table_name: 'productos',
+              column_name: 'stock',
+              id: itemOrden.productos.id,
+              increment: itemOrden.cantidad
+            })
+          })
+          .eq("id", itemOrden.productos.id);
+
+        if (stockError) {
+          console.error("Error actualizando stock:", stockError);
+          // Usar método alternativo si falla
+          const { data: productoActual } = await supabase
+            .from("productos")
+            .select("stock")
+            .eq("id", itemOrden.productos.id)
+            .single();
+
+          if (productoActual) {
+            const nuevoStock = productoActual.stock + itemOrden.cantidad;
+            await supabase
+              .from("productos")
+              .update({ stock: nuevoStock })
+              .eq("id", itemOrden.productos.id);
+          }
+        }
+      }
+
+      alert("Solicitud de devolución enviada correctamente. El stock ha sido actualizado y el reembolso está en proceso.");
       setMostrarModalDevolucion(false);
       setProductoDevolucion(null);
       setDevolucionData({
@@ -186,6 +298,97 @@ export default function OrderConfirmation() {
       console.error("Error solicitando devolución:", error);
       alert("Error al solicitar la devolución");
     }
+  };
+
+  // Funciones para el modal de opiniones
+  const handleAbrirOpinion = (producto: Producto) => {
+    setProductoOpinion(producto);
+    setOpinionData({
+      producto_id: producto.id,
+      orden_id: orden?.id || "",
+      calificacion: 0,
+      comentario: "",
+      titulo: ""
+    });
+    setMostrarModalOpinion(true);
+  };
+
+  const handleEnviarOpinion = async () => {
+    if (opinionData.calificacion === 0) {
+      alert("Por favor selecciona una calificación con estrellas");
+      return;
+    }
+
+    if (!opinionData.comentario.trim()) {
+      alert("Por favor escribe un comentario");
+      return;
+    }
+
+    try {
+      // Obtener el usuario actual
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) {
+        alert("Debes estar logueado para enviar una opinión");
+        return;
+      }
+
+      // Insertar la review en la base de datos
+      const { error } = await supabase
+        .from("reviews")
+        .insert([{
+          producto_id: opinionData.producto_id,
+          usuario_id: user.id,
+          calificacion: opinionData.calificacion,
+          comentario: opinionData.comentario,
+          creado_en: new Date().toISOString()
+        }]);
+
+      if (error) throw error;
+
+      alert("¡Gracias por tu opinión! Tu reseña ha sido publicada.");
+      setMostrarModalOpinion(false);
+      setProductoOpinion(null);
+      setOpinionData({
+        producto_id: "",
+        orden_id: "",
+        calificacion: 0,
+        comentario: "",
+        titulo: ""
+      });
+    } catch (error) {
+      console.error("Error enviando opinión:", error);
+      alert("Error al enviar la opinión");
+    }
+  };
+
+  // Función para renderizar estrellas interactivas
+  const renderStars = (rating: number, onStarClick?: (rating: number) => void, interactive = false) => {
+    return (
+      <div className="flex gap-1">
+        {[1, 2, 3, 4, 5].map((star) => (
+          <button
+            key={star}
+            type="button"
+            className={`text-2xl ${
+              interactive 
+                ? 'cursor-pointer hover:scale-110 transition-transform' 
+                : 'cursor-default'
+            } ${
+              star <= (interactive ? hoverRating || rating : rating)
+                ? 'text-yellow-400'
+                : 'text-gray-300'
+            }`}
+            onClick={() => interactive && onStarClick && onStarClick(star)}
+            onMouseEnter={() => interactive && setHoverRating(star)}
+            onMouseLeave={() => interactive && setHoverRating(0)}
+            disabled={!interactive}
+          >
+            ★
+          </button>
+        ))}
+      </div>
+    );
   };
 
   if (loading) {
@@ -217,6 +420,11 @@ export default function OrderConfirmation() {
   const envio = 0;
   const impuestos = subtotal * 0.10;
   const puedeDevolverProductos = puedeDevolver(orden.creado_en);
+
+  // Función auxiliar para verificar si está en devolución
+  const estaEnDevolucion = (estado: string) => {
+    return estado.toLowerCase().includes('devolucion') || estado.toLowerCase().includes('devolución');
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -289,7 +497,9 @@ export default function OrderConfirmation() {
             </div>
             <div className="text-right">
               <p className="text-sm text-gray-600">Estado</p>
-              <p className="font-semibold text-green-600 capitalize">{orden.estado}</p>
+              <p className={`font-semibold capitalize ${getEstadoStyles(orden.estado)} px-3 py-1 rounded-full text-xs`}>
+                {formatEstadoText(orden.estado)}
+              </p>
             </div>
           </div>
 
@@ -359,7 +569,7 @@ export default function OrderConfirmation() {
                 </div>
               </div>
 
-              {/* Información de devolución - CORREGIDA */}
+              {/* Información de devolución */}
               <div className="border-t border-gray-200 pt-4 mb-4">
                 <p className={`text-sm ${puedeDevolverProductos ? 'text-gray-600' : 'text-red-600'}`}>
                   {puedeDevolverProductos 
@@ -392,12 +602,18 @@ export default function OrderConfirmation() {
                   size="sm" 
                   className="text-blue-600 border-blue-600"
                   onClick={() => handleAbrirDevolucion(item.productos)}
-                  disabled={!puedeDevolverProductos}
+                  disabled={!puedeDevolverProductos || estaEnDevolucion(orden.estado)}
                 >
                   <RotateCcw className="w-4 h-4 mr-1" />
-                  {puedeDevolverProductos ? "Solicitar devolución" : "Devolución expirada"}
+                  {estaEnDevolucion(orden.estado) ? 'Devolución en proceso' : 
+                   puedeDevolverProductos ? "Solicitar devolución" : "Devolución expirada"}
                 </Button>
-                <Button variant="outline" size="sm" className="text-blue-600 border-blue-600">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="text-blue-600 border-blue-600"
+                  onClick={() => handleAbrirOpinion(item.productos)}
+                >
                   <Star className="w-4 h-4 mr-1" />
                   Escribir una opinión
                 </Button>
@@ -510,7 +726,7 @@ export default function OrderConfirmation() {
                 <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
                   <p className="text-sm text-yellow-800">
                     <strong>Importante:</strong> La ventana de devolución se cierra el {calcularFechaDevolucion(orden.creado_en)}. 
-                    Una vez aprobada, recibirás instrucciones para el envío.
+                    Una vez aprobada, recibirás instrucciones para el envío y el stock será actualizado automáticamente.
                   </p>
                 </div>
               </div>
@@ -534,6 +750,112 @@ export default function OrderConfirmation() {
                       comentarios: "",
                       producto_id: "",
                       orden_id: ""
+                    });
+                  }}
+                >
+                  Cancelar
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal para escribir opinión */}
+      {mostrarModalOpinion && productoOpinion && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg max-w-md w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              {/* Header */}
+              <div className="flex justify-between items-start mb-4">
+                <h2 className="text-xl font-bold flex items-center gap-2">
+                  <Star className="w-5 h-5 text-yellow-500" />
+                  Escribir Opinión
+                </h2>
+                <button
+                  onClick={() => setMostrarModalOpinion(false)}
+                  className="text-gray-400 hover:text-gray-600 transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Información del producto */}
+              <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 bg-gray-200 rounded-lg flex-shrink-0">
+                    <img
+                      src={productoOpinion.imagen_url || "/placeholder.png"}
+                      alt={productoOpinion.titulo}
+                      className="w-full h-full object-cover rounded-lg"
+                    />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-gray-900 text-sm">
+                      {productoOpinion.titulo}
+                    </h3>
+                    <p className="text-xs text-gray-500">
+                      Vendido por: {productoOpinion.vendedor_nombre}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Calificación con estrellas */}
+              <div className="mb-6">
+                <label className="block text-sm font-medium mb-3 text-gray-900">
+                  Califica este producto *
+                </label>
+                <div className="flex flex-col items-center gap-3">
+                  {renderStars(opinionData.calificacion, (rating) => 
+                    setOpinionData({...opinionData, calificacion: rating})
+                  , true)}
+                  <p className="text-sm text-gray-600 text-center">
+                    {opinionData.calificacion === 0 
+                      ? "Selecciona la cantidad de estrellas"
+                      : `Calificación: ${opinionData.calificacion} estrella${opinionData.calificacion !== 1 ? 's' : ''}`
+                    }
+                  </p>
+                </div>
+              </div>
+              {/* Comentario */}
+              <div className="mb-6">
+                <label className="block text-sm font-medium mb-2 text-gray-900">
+                  Tu opinión *
+                </label>
+                <textarea
+                  placeholder="Comparte tu experiencia con este producto..."
+                  value={opinionData.comentario}
+                  onChange={(e) => setOpinionData({...opinionData, comentario: e.target.value})}
+                  className="w-full p-3 border border-gray-300 rounded-lg h-32 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  required
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Mínimo 10 caracteres
+                </p>
+              </div>
+
+              {/* Botones */}
+              <div className="flex gap-3">
+                <Button
+                  onClick={handleEnviarOpinion}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700"
+                  disabled={opinionData.calificacion === 0 || opinionData.comentario.trim().length < 10}
+                >
+                  <Star className="w-4 h-4 mr-2" />
+                  Publicar Opinión
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setMostrarModalOpinion(false);
+                    setProductoOpinion(null);
+                    setOpinionData({
+                      producto_id: "",
+                      orden_id: "",
+                      calificacion: 0,
+                      comentario: "",
+                      titulo: ""
                     });
                   }}
                 >

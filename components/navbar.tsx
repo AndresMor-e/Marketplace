@@ -23,17 +23,17 @@ export default function Navbar() {
     const getUserData = async () => {
       try {
         setError(null);
-        console.log("🔄 Obteniendo datos del usuario...");
+        console.log("Obteniendo datos del usuario...");
         
         // 1. Obtener usuario de auth
         const { data: { user }, error: authError } = await supabase.auth.getUser();
         
         if (authError) {
-          console.error("❌ Error en auth:", authError);
+          console.error("Error en auth:", authError);
           throw new Error(`Error de autenticación: ${authError.message}`);
         }
 
-        console.log("✅ Usuario auth:", user?.email);
+        console.log("Usuario auth:", user?.email);
         
         if (!mounted) return;
         
@@ -55,14 +55,14 @@ export default function Navbar() {
           .single();
 
         if (userError) {
-          console.error("❌ Error obteniendo rol:", userError);
+          console.error(" Error obteniendo rol:", userError);
           
           if (userError.code === '42501') {
             throw new Error("Error de permisos: No tienes acceso a la base de datos. Contacta al administrador.");
           }
           
           if (userError.code === 'PGRST116') {
-            console.log("📝 Usuario no encontrado en tabla usuarios, usando metadata...");
+            console.log(" Usuario no encontrado en tabla usuarios, usando metadata...");
             // Usuario existe en auth pero no en usuarios
             const metadataRole = user.user_metadata?.rol;
             if (metadataRole) {
@@ -81,7 +81,7 @@ export default function Navbar() {
             throw new Error(`Error de base de datos: ${userError.message}`);
           }
         } else if (userData) {
-          console.log("✅ Rol obtenido:", userData.rol);
+          console.log("Rol obtenido:", userData.rol);
           setUserRole(userData.rol);
         }
 
@@ -99,13 +99,13 @@ export default function Navbar() {
         }
 
       } catch (error: any) {
-        console.error("💥 Error general:", error);
+        console.error("Error general:", error);
         if (mounted) {
           setError(error.message);
         }
       } finally {
         if (mounted) {
-          console.log("🏁 Carga completada");
+          console.log("Carga completada");
           setLoading(false);
         }
       }
@@ -115,7 +115,7 @@ export default function Navbar() {
 
     // Suscripción a cambios de auth
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      console.log("🔄 Cambio de auth:", event);
+      console.log(" Cambio de auth:", event);
       if (!mounted) return;
       
       setError(null); // Limpiar errores en cambio de estado
@@ -134,7 +134,7 @@ export default function Navbar() {
     // Timeout de seguridad
     const timeout = setTimeout(() => {
       if (mounted && loading) {
-        console.log("⏰ Timeout de seguridad");
+        console.log("Timeout de seguridad");
         setLoading(false);
         setError("Tiempo de carga excedido. Recargue la página.");
       }
