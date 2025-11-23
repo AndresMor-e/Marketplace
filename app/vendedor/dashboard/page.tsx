@@ -94,7 +94,7 @@ export default function VendorDashboard() {
       const vendedorId = user.id;
 
       try {
-        console.log("🔍 Iniciando fetch de stats para vendedor:", vendedorId);
+        console.log("Iniciando fetch de stats para vendedor:", vendedorId);
 
         // 1. TOTAL PRODUCTOS
         const { count: totalProducts, error: productsError } = await supabase
@@ -107,7 +107,7 @@ export default function VendorDashboard() {
           throw productsError;
         }
 
-        console.log("📦 Total productos:", totalProducts);
+        console.log("Total productos:", totalProducts);
 
         // 2. OBTENER ID DE PRODUCTOS DEL VENDEDOR
         const { data: products, error: productsDataError } = await supabase
@@ -121,7 +121,7 @@ export default function VendorDashboard() {
         }
 
         const productIds = products?.map((p) => p.id) ?? [];
-        console.log("🆔 IDs de productos:", productIds);
+        console.log("IDs de productos:", productIds);
 
         // 3. TOTAL ÓRDENES DONDE SE COMPRARON SUS PRODUCTOS
         let totalOrders = 0;
@@ -154,8 +154,8 @@ export default function VendorDashboard() {
               )
             : 0;
 
-          console.log("📊 Total órdenes:", totalOrders);
-          console.log("💰 Total revenue:", totalRevenue);
+          console.log("Total órdenes:", totalOrders);
+          console.log("Total revenue:", totalRevenue);
         }
 
         // 4. RATING PROMEDIO Y REVIEWS
@@ -185,7 +185,7 @@ export default function VendorDashboard() {
             throw reviewsError;
           }
 
-          console.log("⭐ Reviews:", reviewsData);
+          console.log("Reviews:", reviewsData);
 
           vendorReviews = (reviewsData as Review[]) || [];
 
@@ -194,8 +194,8 @@ export default function VendorDashboard() {
               ? Number((vendorReviews.reduce((sum, r) => sum + r.calificacion, 0) / vendorReviews.length).toFixed(1))
               : 0;
 
-          console.log("📈 Rating promedio:", averageRating);
-          console.log("📝 Total reviews:", vendorReviews.length);
+          console.log("Rating promedio:", averageRating);
+          console.log("Total reviews:", vendorReviews.length);
         }
 
         setStats({

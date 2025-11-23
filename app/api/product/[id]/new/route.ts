@@ -39,7 +39,7 @@ export async function POST(req: Request) {
       stock,
       categoria_id,
       imagen_url,
-      vendedor_id: vendedor.id, // 👈 IMPORTANTE
+      vendedor_id: vendedor.id, 
     },
   ]);
 

@@ -53,7 +53,7 @@ export default function EditarProductoPage() {
   const cargarDatos = async () => {
     try {
       setLoading(true);
-      console.log("🔄 Cargando datos para producto:", productoId);
+      console.log("Cargando datos para producto:", productoId);
 
       // Cargar categorías
       const { data: categoriasData, error: catError } = await supabase
@@ -62,10 +62,10 @@ export default function EditarProductoPage() {
         .order("nombre");
 
       if (catError) {
-        console.error("❌ Error cargando categorías:", catError);
+        console.error("Error cargando categorías:", catError);
       } else {
         setCategorias(categoriasData || []);
-        console.log("✅ Categorías cargadas:", categoriasData?.length);
+        console.log("Categorías cargadas:", categoriasData?.length);
       }
 
       // Cargar producto
@@ -75,8 +75,8 @@ export default function EditarProductoPage() {
         .eq("id", productoId)
         .single();
 
-      console.log("📦 Producto cargado:", productoData);
-      console.log("❌ Error cargando producto:", error);
+      console.log("Producto cargado:", productoData);
+      console.log("Error cargando producto:", error);
 
       if (error) {
         console.error("Error cargando producto:", error);
@@ -96,11 +96,11 @@ export default function EditarProductoPage() {
           estado: productoData.estado || "activo",
           imagen_url: productoData.imagen_url || ""
         });
-        console.log("✅ Formulario inicializado con datos del producto");
+        console.log("Formulario inicializado con datos del producto");
       }
 
     } catch (error) {
-      console.error("💥 Error cargando datos:", error);
+      console.error("Error cargando datos:", error);
       alert("Error cargando los datos del producto");
     } finally {
       setLoading(false);
@@ -125,8 +125,8 @@ export default function EditarProductoPage() {
 
     try {
       setSaving(true);
-      console.log("🔄 Iniciando actualización...");
-      console.log("📝 Datos del formulario:", formData);
+      console.log("Iniciando actualización...");
+      console.log("Datos del formulario:", formData);
 
       // Validaciones básicas
       if (!formData.titulo.trim()) {
@@ -150,7 +150,7 @@ export default function EditarProductoPage() {
         return;
       }
 
-      console.log("👤 Usuario autenticado:", user.id);
+      console.log("Usuario autenticado:", user.id);
 
       // Verificar que el usuario es el dueño del producto
       const { data: productoVerificado, error: verifyError } = await supabase
@@ -165,8 +165,8 @@ export default function EditarProductoPage() {
         return;
       }
 
-      console.log("🔍 Vendedor del producto:", productoVerificado.vendedor_id);
-      console.log("🔍 Usuario actual:", user.id);
+      console.log("Vendedor del producto:", productoVerificado.vendedor_id);
+      console.log("Usuario actual:", user.id);
 
       if (productoVerificado.vendedor_id !== user.id) {
         alert("No tienes permisos para editar este producto");
@@ -186,7 +186,7 @@ export default function EditarProductoPage() {
         // Se eliminó: actualizado_en: new Date().toISOString()
       };
 
-      console.log("📦 Datos a actualizar:", updates);
+      console.log("Datos a actualizar:", updates);
 
       // Realizar el update
       const { data, error: updateError } = await supabase
@@ -196,8 +196,8 @@ export default function EditarProductoPage() {
         .eq("vendedor_id", user.id) // Doble verificación de seguridad
         .select();
 
-      console.log("✅ Respuesta de update:", data);
-      console.log("❌ Error de update:", updateError);
+      console.log("Respuesta de update:", data);
+      console.log("Error de update:", updateError);
 
       if (updateError) {
         console.error("Error detallado:", updateError);
@@ -213,14 +213,14 @@ export default function EditarProductoPage() {
         return;
       }
 
-      console.log("🎉 Producto actualizado correctamente");
-      alert("✅ Producto actualizado correctamente");
+      console.log("Producto actualizado correctamente");
+      alert("Producto actualizado correctamente");
       router.push("/vendedor/products");
       router.refresh(); // Forzar actualización de la cache
 
     } catch (error: any) {
-      console.error("💥 Error inesperado:", error);
-      alert(`❌ Error inesperado: ${error.message || "Por favor intenta nuevamente"}`);
+      console.error("Error inesperado:", error);
+      alert(`Error inesperado: ${error.message || "Por favor intenta nuevamente"}`);
     } finally {
       setSaving(false);
     }
@@ -229,7 +229,7 @@ export default function EditarProductoPage() {
   // Función temporal para probar la conexión
   const testUpdate = async () => {
     try {
-      console.log("🧪 Ejecutando test de actualización...");
+      console.log("Ejecutando test de actualización...");
       
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
@@ -244,17 +244,17 @@ export default function EditarProductoPage() {
         .eq("id", productoId)
         .eq("vendedor_id", user.id);
 
-      console.log("🧪 Test update error:", error);
+      console.log("Test update error:", error);
       
       if (!error) {
-        alert("✅ Test exitoso - Los permisos están bien");
+        alert("Test exitoso - Los permisos están bien");
         cargarDatos(); // Recargar datos
       } else {
-        alert(`❌ Test fallido: ${error.message}`);
+        alert(` Test fallido: ${error.message}`);
       }
     } catch (error) {
-      console.error("🧪 Test error:", error);
-      alert("❌ Error en test");
+      console.error("Test error:", error);
+      alert("Error en test");
     }
   };
 

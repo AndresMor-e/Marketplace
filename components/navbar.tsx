@@ -47,7 +47,7 @@ export default function Navbar() {
         }
 
         // 2. Obtener rol de la tabla usuarios
-        console.log("🔍 Buscando rol para:", user.id);
+        console.log("Buscando rol para:", user.id);
         const { data: userData, error: userError } = await supabase
           .from("usuarios")
           .select("rol")
@@ -95,7 +95,7 @@ export default function Navbar() {
           const total = cartData?.reduce((sum, item) => sum + item.quantity, 0) || 0;
           if (mounted) setCartCount(total);
         } catch (cartError) {
-          console.log("🛒 Carrito no disponible:", cartError);
+          console.log(" Carrito no disponible:", cartError);
         }
 
       } catch (error: any) {

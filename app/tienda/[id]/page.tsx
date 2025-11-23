@@ -67,7 +67,7 @@ export default function TiendaPage() {
     const fetchTiendaYProductos = async () => {
       try {
         setError(null);
-        console.log("🛍️ Buscando tienda con ID:", id);
+        console.log(" Buscando tienda con ID:", id);
 
         if (!id) {
           setError("ID de tienda no válido");
@@ -83,13 +83,13 @@ export default function TiendaPage() {
           .single();
 
         if (tiendaError) {
-          console.error("❌ Error fetching tienda:", tiendaError);
+          console.error("Error fetching tienda:", tiendaError);
           setError("Tienda no encontrada");
           setLoading(false);
           return;
         }
 
-        console.log("✅ Tienda encontrada:", tiendaData);
+        console.log("Tienda encontrada:", tiendaData);
 
         // SEGUNDO: Obtener información del vendedor
         let tiendaConVendedor = tiendaData;
@@ -105,7 +105,7 @@ export default function TiendaPage() {
               ...tiendaData,
               vendedor: vendedorData
             };
-            console.log("✅ Información del vendedor obtenida");
+            console.log("Información del vendedor obtenida");
           }
         }
 
@@ -124,11 +124,11 @@ export default function TiendaPage() {
           .order("creado_en", { ascending: false });
 
         if (!errorPorTienda && productosPorTienda && productosPorTienda.length > 0) {
-          console.log("✅ Productos encontrados por tienda_id:", productosPorTienda.length);
+          console.log("Productos encontrados por tienda_id:", productosPorTienda.length);
           productosList = await calcularRatingsProductos(productosPorTienda);
         } else {
           // SEGUNDO INTENTO: Buscar productos por vendedor_id (fallback)
-          console.log("ℹ️ No se encontraron productos por tienda_id, buscando por vendedor_id...");
+          console.log("ℹNo se encontraron productos por tienda_id, buscando por vendedor_id...");
           const { data: productosPorVendedor, error: errorPorVendedor } = await supabase
             .from("productos")
             .select("*")
@@ -137,18 +137,18 @@ export default function TiendaPage() {
             .order("creado_en", { ascending: false });
 
           if (!errorPorVendedor && productosPorVendedor) {
-            console.log("✅ Productos encontrados por vendedor_id:", productosPorVendedor.length);
+            console.log("Productos encontrados por vendedor_id:", productosPorVendedor.length);
             productosList = await calcularRatingsProductos(productosPorVendedor);
           } else {
-            console.log("⚠️ No se encontraron productos para esta tienda");
+            console.log("No se encontraron productos para esta tienda");
           }
         }
 
-        console.log("📦 Productos finales a mostrar:", productosList.length);
+        console.log(" Productos finales a mostrar:", productosList.length);
         setProductos(productosList);
 
       } catch (error) {
-        console.error("❌ Error general:", error);
+        console.error("Error general:", error);
         setError("Error al cargar la tienda");
       } finally {
         setLoading(false);

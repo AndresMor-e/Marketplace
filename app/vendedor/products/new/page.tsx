@@ -28,7 +28,7 @@ export default function NuevoProducto() {
   const router = useRouter();
   const supabase = createClient();
 
-  // 📌 Cargar categorías desde la BD
+  // Cargar categorías desde la BD
   useEffect(() => {
     const cargarCategorias = async () => {
       const { data, error } = await supabase
@@ -42,7 +42,7 @@ export default function NuevoProducto() {
     cargarCategorias();
   }, []);
 
-  // 📌 Manejo de cambios en inputs
+  //  Manejo de cambios en inputs
   const handleChange = (
     e: React.ChangeEvent<
       HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
@@ -54,7 +54,7 @@ export default function NuevoProducto() {
     });
   };
 
-  // 📌 Enviar formulario
+  // Enviar formulario
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -83,7 +83,7 @@ export default function NuevoProducto() {
 
       const { error: insertError } = await supabase.from("productos").insert([
         {
-          vendedor_id: auth.user.id, // 👈 corregido
+          vendedor_id: auth.user.id, // corregido
           categoria_id: formData.categoria_id,
           titulo: formData.titulo,
           descripcion: formData.descripcion || null,
@@ -100,7 +100,7 @@ export default function NuevoProducto() {
         return;
       }
 
-      // 🔄 Redirigir a la lista de productos del vendedor
+      // Redirigir a la lista de productos del vendedor
       router.push("/vendedor/products");
     } catch (err) {
       console.log(err);
