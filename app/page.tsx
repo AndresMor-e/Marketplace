@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import Navbar from "@/components/navbar";
 import HeroSection from "@/components/hero-section";
-import CategoryGrid from "@/components/category-grid";
 import Image from "next/image";
 import Link from "next/link";
 
@@ -19,49 +18,45 @@ interface Product {
   descripcion?: string;
   calificacion_promedio?: number;
   total_reviews?: number;
+  categoria_id?: string;
+  categoria_nombre?: string;
+}
+
+interface Category {
+  id: string;
+  nombre: string;
+  descripcion?: string;
 }
 
 export default function Home() {
   const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [loading, setLoading] = useState(true);
   const supabase = createClient();
 
-  // Función para formatear el precio - VERSIÓN CORREGIDA
+  // Función para formatear el precio
   const formatPrice = (price: number | string) => {
     try {
       let priceNumber: number;
       
-      // Convertir a número
       if (typeof price === 'string') {
-        // Remover símbolos no numéricos excepto punto y coma
         const cleanString = price.toString().replace(/[^\d.,]/g, '');
-        // Reemplazar coma por punto para parseFloat
         priceNumber = parseFloat(cleanString.replace(',', '.'));
       } else {
         priceNumber = price;
       }
       
       if (isNaN(priceNumber)) {
-        console.warn(`Precio inválido: ${price}`);
         return `$${price}`;
       }
       
-      // DEBUG: Mostrar en consola para verificar
-      console.log(`Formateando precio: ${price} -> ${priceNumber}`);
-      
-      // Si el número es muy grande (ej: 100000), probablemente necesita formato de miles
-      if (priceNumber >= 1000) {
-        return `$${priceNumber.toLocaleString('es-CO')}`;
-      }
-      
-      // Para números pequeños, mostrar normalmente
       return `$${priceNumber.toLocaleString('es-CO', {
         minimumFractionDigits: 0,
         maximumFractionDigits: 0
       })}`;
       
     } catch (error) {
-      console.error('Error formateando precio:', error);
       return `$${price}`;
     }
   };
@@ -100,13 +95,39 @@ export default function Home() {
     );
   };
 
+  // Cargar categorías
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("categorias")
+          .select("id, nombre, descripcion")
+          .order("nombre");
+
+        if (error) {
+          console.error("Error cargando categorías:", error);
+          return;
+        }
+
+        if (data) {
+          setCategories(data);
+        }
+      } catch (error) {
+        console.error("Error inesperado cargando categorías:", error);
+      }
+    };
+
+    fetchCategories();
+  }, []);
+
+  // Cargar productos
   useEffect(() => {
     const fetchProducts = async () => {
       try {
-        console.log("Cargando productos...");
+        setLoading(true);
 
-        // 1) Traer productos activos
-        const { data: productsData, error } = await supabase
+        // Query base para productos
+        let query = supabase
           .from("productos")
           .select(`
             id,
@@ -115,21 +136,25 @@ export default function Home() {
             imagen_url,
             vendedor_id,
             estado,
-            descripcion
+            descripcion,
+            categoria_id,
+            categorias!inner (
+              id,
+              nombre
+            )
           `)
           .eq("estado", "activo")
-          .limit(8)
           .order("creado_en", { ascending: false });
 
-        console.log("Productos encontrados:", productsData);
-        
-        // Debug: Ver precios originales
-        if (productsData) {
-          console.log("DEBUG - Precios crudos desde BD:");
-          productsData.forEach(product => {
-            console.log(`Producto: ${product.titulo}, Precio original: ${product.precio}, Tipo: ${typeof product.precio}`);
-          });
+        // Filtrar por categoría si no es "all"
+        if (selectedCategory !== "all") {
+          query = query.eq("categoria_id", selectedCategory);
         }
+
+        // Limitar a 8 productos en la página principal
+        query = query.limit(8);
+
+        const { data: productsData, error } = await query;
 
         if (error) {
           console.error("Error cargando productos:", error);
@@ -138,21 +163,18 @@ export default function Home() {
         }
 
         if (!productsData || productsData.length === 0) {
-          console.log("No se encontraron productos");
           setProducts([]);
           setLoading(false);
           return;
         }
 
-        // 2) Traer calificaciones promedio de cada producto
+        // Traer calificaciones promedio de cada producto
         const productIds = productsData.map(p => p.id);
         
-        const { data: reviewsData, error: reviewsError } = await supabase
+        const { data: reviewsData } = await supabase
           .from("reviews")
           .select("producto_id, calificacion")
           .in("producto_id", productIds);
-
-        console.log("Reviews encontradas:", reviewsData);
 
         // Calcular promedios
         const productRatings: Record<string, { promedio: number, total: number }> = {};
@@ -173,7 +195,7 @@ export default function Home() {
           });
         }
 
-        // 3) Traer vendedores correspondientes
+        // Traer vendedores correspondientes
         const vendedorIds = productsData
           .map((p) => p.vendedor_id)
           .filter((id): id is string => !!id);
@@ -181,12 +203,10 @@ export default function Home() {
         let vendedoresMap: Record<string, string> = {};
 
         if (vendedorIds.length > 0) {
-          const { data: vendedores, error: vendedoresError } = await supabase
+          const { data: vendedores } = await supabase
             .from("usuarios")
             .select("id, nombre")
             .in("id", vendedorIds);
-
-          console.log("Vendedores encontrados:", vendedores);
 
           if (vendedores) {
             vendedores.forEach((v) => {
@@ -195,18 +215,29 @@ export default function Home() {
           }
         }
 
-        // 4) Unir productos + calificaciones + vendedores
+        // Unir productos + calificaciones + vendedores
         const merged = productsData.map((p) => {
           const ratingInfo = productRatings[p.id];
+          
+          // Acceder correctamente a los datos de categorías
+          let categoriaNombre = "Sin categoría";
+          if (p.categorias) {
+            if (Array.isArray(p.categorias)) {
+              categoriaNombre = p.categorias[0]?.nombre || "Sin categoría";
+            } else {
+              categoriaNombre = (p.categorias as any).nombre || "Sin categoría";
+            }
+          }
+
           return {
             ...p,
             vendedor_nombre: vendedoresMap[p.vendedor_id ?? ""] || "Vendedor",
             calificacion_promedio: ratingInfo ? Number(ratingInfo.promedio.toFixed(1)) : undefined,
-            total_reviews: ratingInfo ? ratingInfo.total : 0
+            total_reviews: ratingInfo ? ratingInfo.total : 0,
+            categoria_nombre: categoriaNombre
           };
         });
 
-        console.log("Productos finales:", merged);
         setProducts(merged);
 
       } catch (error) {
@@ -217,7 +248,7 @@ export default function Home() {
     };
 
     fetchProducts();
-  }, []);
+  }, [selectedCategory]);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -226,21 +257,81 @@ export default function Home() {
       <main className="max-w-7xl mx-auto px-4 py-12">
         <HeroSection />
 
-        <section className="my-16">
-          <h2 className="text-3xl font-bold mb-8 text-gray-900">
-            Productos destacados
-          </h2>
+        {/* Filtro de categorías */}
+        <section className="my-12">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8">
+            <h2 className="text-3xl font-bold text-gray-900 mb-4 md:mb-0">
+              Productos destacados
+            </h2>
+            
+            {/* Selector de categorías */}
+            <div className="flex items-center gap-4">
+              <label htmlFor="category-filter" className="text-sm font-medium text-gray-700">
+                Filtrar por categoría:
+              </label>
+              <select
+                id="category-filter"
+                value={selectedCategory}
+                onChange={(e) => setSelectedCategory(e.target.value)}
+                className="border border-gray-300 rounded-lg px-3 py-2 bg-white text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="all">Todas las categorías</option>
+                {categories.map((category) => (
+                  <option key={category.id} value={category.id}>
+                    {category.nombre}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
 
+          {/* Grid de categorías como navegación */}
+          {categories.length > 0 && (
+            <div className="mb-12">
+              <h3 className="text-xl font-semibold text-gray-900 mb-4">
+                Explorar categorías
+              </h3>
+              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                {categories.map((category) => (
+                  <Link
+                    key={category.id}
+                    href={`/category/${encodeURIComponent(category.nombre)}`}
+                    className="bg-white rounded-lg shadow hover:shadow-lg transition p-4 text-center cursor-pointer border-2 border-transparent hover:border-blue-500"
+                  >
+                    <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-2">
+                      <span className="text-blue-600 text-lg font-bold">
+                        {category.nombre.charAt(0)}
+                      </span>
+                    </div>
+                    <span className="text-sm font-medium text-gray-900">
+                      {category.nombre}
+                    </span>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Productos */}
           {loading ? (
             <div className="text-center py-8">
               <p className="text-gray-600">Cargando productos...</p>
             </div>
           ) : products.length === 0 ? (
             <div className="text-center py-8">
-              <p className="text-gray-600 mb-4">No hay productos disponibles</p>
-              <p className="text-sm text-gray-500">
-                Los vendedores aún no han publicado productos.
+              <p className="text-gray-600 mb-4">
+                {selectedCategory === "all" 
+                  ? "No hay productos disponibles" 
+                  : "No hay productos en esta categoría"}
               </p>
+              {selectedCategory !== "all" && (
+                <button
+                  onClick={() => setSelectedCategory("all")}
+                  className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+                >
+                  Ver todos los productos
+                </button>
+              )}
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -266,6 +357,12 @@ export default function Home() {
                     </div>
 
                     <div className="p-4 flex-1 flex flex-col">
+                      <div className="mb-2">
+                        <span className="inline-block bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded">
+                          {product.categoria_nombre}
+                        </span>
+                      </div>
+
                       <h3 className="font-semibold text-gray-900 line-clamp-2 mb-2">
                         {product.titulo}
                       </h3>
