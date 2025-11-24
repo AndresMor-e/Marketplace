@@ -36,16 +36,19 @@ export default function VendorSettings() {
           return;
         }
 
-        // Intentar obtener la tienda del vendedor
+        // CORREGIDO: Usar .maybeSingle() en lugar de .single()
         const { data, error: fetchError } = await supabase
           .from("tiendas")
           .select("nombre_tienda, descripcion, logo_url")
           .eq("vendedor_id", user.id)
-          .single();
+          .maybeSingle(); // ← Cambiado a maybeSingle()
 
         if (fetchError) {
-          // En caso de que haya un error al obtener la tienda
-          setError("Error al cargar la tienda: " + fetchError.message);
+          console.error("Error al cargar la tienda:", fetchError);
+          // No mostrar error si no hay tienda, es normal
+          if (fetchError.code !== 'PGRST116') {
+            setError("Error al cargar la tienda: " + fetchError.message);
+          }
           setLoading(false);
           return;
         }
@@ -62,8 +65,7 @@ export default function VendorSettings() {
         setLoading(false);
 
       } catch (err) {
-        // Manejar cualquier error inesperado
-        console.error("Error al cargar la tienda:", err);
+        console.error("Error inesperado al cargar la tienda:", err);
         setError("Error inesperado al cargar la tienda.");
         setLoading(false);
       }
@@ -95,15 +97,22 @@ export default function VendorSettings() {
         return;
       }
 
+      // CORREGIDO: Usar .maybeSingle() aquí también
       const { data: userProfile, error: profileError } = await supabase
         .from("usuarios")
         .select("id, rol")
         .eq("id", user.id)
-        .single();
+        .maybeSingle(); // ← Cambiado a maybeSingle()
 
       if (profileError) {
         setError("Error al obtener el perfil de usuario.");
         console.error("Error en la consulta de usuario:", profileError);
+        setSaving(false);
+        return;
+      }
+
+      if (!userProfile) {
+        setError("Perfil de usuario no encontrado.");
         setSaving(false);
         return;
       }
@@ -114,15 +123,14 @@ export default function VendorSettings() {
         return;
       }
 
-      // Verificar si la tienda ya existe
+      // CORREGIDO: Verificar si la tienda ya existe usando .maybeSingle()
       const { data: tiendaExistente, error: tiendaError } = await supabase
         .from("tiendas")
         .select("vendedor_id")
         .eq("vendedor_id", userProfile.id)
-        .single();
+        .maybeSingle(); // ← Cambiado a maybeSingle()
 
       if (tiendaError && tiendaError.code !== 'PGRST116') {
-        // PGRST116 es el error cuando no se encuentra ningún registro, lo cual es normal
         setError("Error al verificar la tienda: " + tiendaError.message);
         console.error("Error al verificar la tienda:", tiendaError);
         setSaving(false);
@@ -147,8 +155,7 @@ export default function VendorSettings() {
           console.error("Error al crear la tienda:", insertError);
         } else {
           alert("Tienda creada y configuración guardada correctamente.");
-          // CORREGIDO: Redirigir a la ruta correcta
-          window.location.href = "/vendedor/dashboard";
+          router.push("/vendedor/dashboard");
         }
       } else {
         // Si la tienda ya existe, actualizamos los datos
@@ -166,8 +173,7 @@ export default function VendorSettings() {
           console.error("Error al actualizar la tienda:", updateError);
         } else {
           alert("Configuración guardada correctamente.");
-          // CORREGIDO: Redirigir a la ruta correcta
-          window.location.href = "/vendedor/dashboard";
+          router.push("/vendedor/dashboard");
         }
       }
     } catch (err) {
@@ -178,7 +184,16 @@ export default function VendorSettings() {
     }
   };
 
-  if (loading) return <div>Cargando...</div>;
+  if (loading) return (
+    <div className="max-w-2xl">
+      <div className="bg-white rounded-lg shadow p-8">
+        <div className="flex justify-center items-center py-8">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+          <span className="ml-2">Cargando configuración...</span>
+        </div>
+      </div>
+    </div>
+  );
 
   return (
     <div className="max-w-2xl">
@@ -195,14 +210,14 @@ export default function VendorSettings() {
           {/* Nombre de la tienda */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Nombre de la tienda
+              Nombre de la tienda *
             </label>
             <Input
               type="text"
               name="nombre_tienda"
               value={settings.nombre_tienda}
               onChange={handleChange}
-              placeholder="Ej: Tienda Artesanal"
+              placeholder="Ej: Mi Tienda Online"
               required
               disabled={saving}
             />
@@ -217,10 +232,10 @@ export default function VendorSettings() {
               name="descripcion"
               value={settings.descripcion}
               onChange={handleChange}
-              placeholder="Describe tu tienda..."
-              rows={6}
+              placeholder="Describe los productos que vendes, tu misión, etc..."
+              rows={4}
               disabled={saving}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
             />
           </div>
 
@@ -234,32 +249,53 @@ export default function VendorSettings() {
               name="logo_url"
               value={settings.logo_url}
               onChange={handleChange}
-              placeholder="https://tutienda.com/logo.png"
+              placeholder="https://ejemplo.com/logo.png"
               disabled={saving}
             />
-            {/* Mostrar el logo si se ha proporcionado una URL válida */}
+            <p className="text-xs text-gray-500 mt-1">
+              Opcional: Inserta la URL de una imagen para el logo de tu tienda
+            </p>
+            
+            {/* Mostrar preview del logo */}
             {settings.logo_url && (
               <div className="mt-4">
-                <img
-                  src={settings.logo_url}
-                  alt="Logo de la tienda"
-                  className="max-w-xs mx-auto"
-                />
+                <p className="text-sm font-medium text-gray-700 mb-2">Vista previa:</p>
+                <div className="border rounded-lg p-4 bg-gray-50">
+                  <img
+                    src={settings.logo_url}
+                    alt="Logo de la tienda"
+                    className="max-w-xs max-h-32 object-contain mx-auto"
+                    onError={(e) => {
+                      // Si la imagen no carga, mostrar mensaje
+                      e.currentTarget.style.display = 'none';
+                    }}
+                  />
+                </div>
               </div>
             )}
           </div>
 
-          {/* Botón para guardar */}
-          <Button
-            type="submit"
-            disabled={saving}
-            className="w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white"
-          >
-            {saving ? "Guardando..." : "Guardar configuración"}
-          </Button>
+          {/* Botones de acción */}
+          <div className="flex gap-4 pt-4">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => router.back()}
+              disabled={saving}
+              className="flex-1"
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="submit"
+              disabled={saving}
+              className="flex-1 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white"
+            >
+              {saving ? "Guardando..." : "Guardar configuración"}
+            </Button>
+          </div>
         </form>
       </div>
     </div>
   );
 }
-

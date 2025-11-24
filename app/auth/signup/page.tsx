@@ -25,11 +25,17 @@ export default function SignupPage() {
     try {
       console.log("INICIANDO REGISTRO...");
 
-      // PASO 1: Solo Auth (sin triggers ahora)
-      console.log(" Paso 1: Creando usuario en Auth...");
+      // PASO 1: Registro en Auth con metadata
+      console.log("Paso 1: Creando usuario en Auth con metadata...");
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: email.trim(),
         password: password.trim(),
+        options: {
+          data: {
+            nombre: name.trim(),
+            rol: userType // ← Esto se pasa al trigger
+          }
+        }
       });
 
       console.log("Auth Data:", authData);
@@ -45,80 +51,17 @@ export default function SignupPage() {
         return;
       }
 
-      const userId = authData.user.id;
-      console.log("Usuario Auth creado. ID:", userId);
-
-      // Pequeña pausa
-      await new Promise(resolve => setTimeout(resolve, 1000));
-
-      // PASO 2: Insertar en usuarios
-      console.log("Paso 2: Insertando en tabla usuarios...");
-      const { data: userData, error: userError } = await supabase
-        .from("usuarios")
-        .insert({
-          id: userId,
-          nombre: name.trim(),
-          correo: email.trim(),
-          rol: userType,
-        })
-        .select();
-
-      console.log("Resultado usuarios:", userData);
-      console.log("Error usuarios:", userError);
-
-      if (userError) {
-        setError(`Error creando perfil de usuario: ${userError.message}`);
-        return;
-      }
-
-      // PASO 3: Insertar en tabla específica
-      console.log(" Paso 3: Insertando en tabla específica...");
-      
-      if (userType === "cliente") {
-        const { data: clienteData, error: clienteError } = await supabase
-          .from("clientes")
-          .insert({
-            usuario_id: userId,
-            puntos: 0,
-          })
-          .select();
-
-        console.log("Resultado clientes:", clienteData);
-        console.log("Error clientes:", clienteError);
-
-        if (clienteError) {
-          setError(`Error creando perfil de cliente: ${clienteError.message}`);
-          return;
-        }
-      } else {
-        const { data: vendedorData, error: vendedorError } = await supabase
-          .from("vendedores")
-          .insert({
-            usuario_id: userId,
-            nombre_tienda: `${name.trim()}'s Tienda`,
-          })
-          .select();
-
-        console.log("Resultado vendedores:", vendedorData);
-        console.log("Error vendedores:", vendedorError);
-
-        if (vendedorError) {
-          setError(`Error creando perfil de vendedor: ${vendedorError.message}`);
-          return;
-        }
-      }
-
       console.log("REGISTRO COMPLETADO EXITOSAMENTE!");
       
-      // Éxito
-      setError("¡Cuenta creada exitosamente! Redirigiendo al login...");
+      // Éxito - mostrar mensaje y redirigir
+      setError("✅ ¡Cuenta creada exitosamente! Revisa tu email para confirmar.");
       
       setTimeout(() => {
         router.push("/auth/login");
-      }, 2000);
+      }, 3000);
 
     } catch (err: any) {
-      console.error("💥 ERROR GENERAL:", err);
+      console.error("ERROR GENERAL:", err);
       setError(`Error inesperado: ${err.message}`);
     } finally {
       setLoading(false);
